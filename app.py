@@ -56,13 +56,14 @@ def search_stock():
         resp = SESSION.get(url, timeout=8)
         data = resp.json()
         items = data.get('QuotationCodeTable', {}).get('Data', [])
+        # AStock=沪深主板, 23=科创板, 81=北交所
+        A_STOCK_CLASSIFY = {'AStock', '23', '81'}
         results = []
         for item in items:
             code = item.get('Code', '')
             name = item.get('Name', '')
             classify = item.get('Classify', '')
-            # 只保留A股，6位纯数字代码
-            if classify == 'AStock' and len(code) == 6 and code.isdigit():
+            if classify in A_STOCK_CLASSIFY and len(code) == 6 and code.isdigit():
                 results.append({'code': code, 'name': name})
         return jsonify(results[:10])
     except Exception as e:
