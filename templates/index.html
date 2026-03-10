@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>人造指数平台</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0d1117; color: #e6edf3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+h1 { font-size: 20px; font-weight: 600; color: #f0f6fc; margin-bottom: 24px; letter-spacing: 0.5px; }
+h1 span { color: #58a6ff; }
+
+.panel { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+.panel-title { font-size: 13px; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
+
+/* 搜索 */
+.search-row { display: flex; gap: 8px; position: relative; }
+.search-input { flex: 1; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 8px 12px; color: #e6edf3; font-size: 14px; outline: none; transition: border-color 0.2s; }
+.search-input:focus { border-color: #58a6ff; }
+.search-btn { background: #238636; border: none; border-radius: 6px; padding: 8px 16px; color: #fff; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.search-btn:hover { background: #2ea043; }
+.dropdown { position: absolute; top: 100%; left: 0; right: 60px; background: #1c2128; border: 1px solid #30363d; border-radius: 6px; z-index: 100; max-height: 240px; overflow-y: auto; margin-top: 4px; display: none; }
+.dropdown.show { display: block; }
+.dropdown-item { padding: 9px 14px; cursor: pointer; font-size: 14px; display: flex; justify-content: space-between; }
+.dropdown-item:hover { background: #30363d; }
+.dropdown-item .code { color: #8b949e; font-size: 12px; }
+
+/* 股票列表 */
+.stock-list { display: flex; flex-wrap: wrap; gap: 8px; min-height: 36px; }
+.stock-tag { display: flex; align-items: center; gap: 6px; background: #1f2937; border: 1px solid #374151; border-radius: 20px; padding: 4px 12px; font-size: 13px; }
+.stock-tag .name { color: #e6edf3; }
+.stock-tag .code { color: #6b7280; font-size: 11px; }
+.stock-tag .remove { color: #6b7280; cursor: pointer; font-size: 16px; line-height: 1; margin-left: 2px; }
+.stock-tag .remove:hover { color: #f85149; }
+.empty-hint { color: #484f58; font-size: 13px; padding: 6px 0; }
+
+/* 配置行 */
+.config-row { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+.config-group { display: flex; flex-direction: column; gap: 6px; }
+.config-label { font-size: 12px; color: #8b949e; }
+.radio-group { display: flex; gap: 8px; }
+.radio-btn { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 6px 14px; font-size: 13px; cursor: pointer; color: #8b949e; transition: all 0.15s; }
+.radio-btn.active { background: #1f3a5f; border-color: #58a6ff; color: #58a6ff; }
+.date-inputs { display: flex; gap: 8px; align-items: center; }
+.date-input { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 6px 10px; color: #e6edf3; font-size: 13px; outline: none; }
+.date-input:focus { border-color: #58a6ff; }
+
+/* 生成按钮 */
+.build-btn { background: #1f3a5f; border: 1px solid #58a6ff; border-radius: 6px; padding: 10px 28px; color: #58a6ff; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.build-btn:hover { background: #58a6ff; color: #0d1117; }
+.build-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 权重展示 */
+.weight-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.weight-item { font-size: 12px; color: #8b949e; background: #0d1117; border-radius: 4px; padding: 3px 8px; }
+.weight-item span { color: #58a6ff; }
+
+/* K线图 */
+#chart { width: 100%; height: 480px; }
+.chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.chart-title { font-size: 14px; color: #e6edf3; }
+.chart-subtitle { font-size: 12px; color: #8b949e; }
+
+/* 状态 */
+.status { font-size: 13px; padding: 8px 0; min-height: 24px; }
+.status.loading { color: #8b949e; }
+.status.error { color: #f85149; }
+.status.success { color: #3fb950; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>人造指数 <span>Custom Index</span></h1>
+
+  <!-- 搜索添加股票 -->
+  <div class="panel">
+    <div class="panel-title">选股</div>
+    <div class="search-row">
+      <input class="search-input" id="searchInput" placeholder="输入股票名称或代码..." autocomplete="off">
+      <div class="dropdown" id="dropdown"></div>
+      <button class="search-btn" onclick="doSearch()">搜索</button>
+    </div>
+    <div style="margin-top:14px;">
+      <div class="stock-list" id="stockList">
+        <span class="empty-hint">还没有选股，搜索后点击添加</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 配置 -->
+  <div class="panel">
+    <div class="panel-title">配置</div>
+    <div class="config-row">
+      <div class="config-group">
+        <div class="config-label">加权方式</div>
+        <div class="radio-group" id="weightGroup">
+          <div class="radio-btn active" data-val="equal" onclick="selectWeight(this)">等额加权</div>
+          <div class="radio-btn" data-val="market_cap" onclick="selectWeight(this)">市值加权</div>
+          <div class="radio-btn" data-val="amount" onclick="selectWeight(this)">成交额加权</div>
+        </div>
+      </div>
+      <div class="config-group">
+        <div class="config-label">时间范围</div>
+        <div class="radio-group" id="rangeGroup">
+          <div class="radio-btn" data-val="3m" onclick="selectRange(this)">近3月</div>
+          <div class="radio-btn active" data-val="1y" onclick="selectRange(this)">近1年</div>
+          <div class="radio-btn" data-val="3y" onclick="selectRange(this)">近3年</div>
+          <div class="radio-btn" data-val="custom" onclick="selectRange(this)">自定义</div>
+        </div>
+      </div>
+      <div class="config-group" id="customDateGroup" style="display:none;">
+        <div class="config-label">自定义日期</div>
+        <div class="date-inputs">
+          <input class="date-input" type="date" id="startDate">
+          <span style="color:#484f58">—</span>
+          <input class="date-input" type="date" id="endDate">
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px; display:flex; align-items:center; gap:16px;">
+      <button class="build-btn" id="buildBtn" onclick="buildIndex()">生成指数</button>
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+
+  <!-- 图表 -->
+  <div class="panel" id="chartPanel" style="display:none;">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title" id="chartTitle">自定义指数</div>
+        <div class="chart-subtitle" id="chartSubtitle"></div>
+      </div>
+      <div class="weight-bar" id="weightBar"></div>
+    </div>
+    <div id="chart"></div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let stocks = [];       // [{code, name}]
+let weightType = 'equal';
+let rangeType = '1y';
+let chart = null;
+
+// 搜索
+const searchInput = document.getElementById('searchInput');
+const dropdown = document.getElementById('dropdown');
+let searchTimer = null;
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(doSearch, 300);
+});
+searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-row')) dropdown.classList.remove('show');
+});
+
+async function doSearch() {
+  const q = searchInput.value.trim();
+  if (!q) { dropdown.classList.remove('show'); return; }
+  try {
+    const res = await fetch(`${API}/api/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!data.length) { dropdown.classList.remove('show'); return; }
+    dropdown.innerHTML = data.map(s =>
+      `<div class="dropdown-item" onclick="addStock('${s.code}','${s.name}')">
+        <span>${s.name}</span><span class="code">${s.code}</span>
+      </div>`
+    ).join('');
+    dropdown.classList.add('show');
+  } catch(e) { console.error(e); }
+}
+
+function addStock(code, name) {
+  if (stocks.find(s => s.code === code)) { dropdown.classList.remove('show'); return; }
+  if (stocks.length >= 30) { setStatus('最多添加30只股票', 'error'); return; }
+  stocks.push({ code, name });
+  renderStockList();
+  dropdown.classList.remove('show');
+  searchInput.value = '';
+}
+
+function removeStock(code) {
+  stocks = stocks.filter(s => s.code !== code);
+  renderStockList();
+}
+
+function renderStockList() {
+  const el = document.getElementById('stockList');
+  if (!stocks.length) {
+    el.innerHTML = '<span class="empty-hint">还没有选股，搜索后点击添加</span>';
+    return;
+  }
+  el.innerHTML = stocks.map(s =>
+    `<div class="stock-tag">
+      <span class="name">${s.name}</span>
+      <span class="code">${s.code}</span>
+      <span class="remove" onclick="removeStock('${s.code}')">×</span>
+    </div>`
+  ).join('');
+}
+
+// 加权方式
+function selectWeight(el) {
+  document.querySelectorAll('#weightGroup .radio-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  weightType = el.dataset.val;
+}
+
+// 时间范围
+function selectRange(el) {
+  document.querySelectorAll('#rangeGroup .radio-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  rangeType = el.dataset.val;
+  document.getElementById('customDateGroup').style.display = rangeType === 'custom' ? 'flex' : 'none';
+}
+
+function getDateRange() {
+  const now = new Date();
+  const fmt = d => d.toISOString().slice(0, 10);
+  const end = fmt(now);
+  if (rangeType === '3m') return { start: fmt(new Date(now - 90*864e5)), end };
+  if (rangeType === '1y') return { start: fmt(new Date(now - 365*864e5)), end };
+  if (rangeType === '3y') return { start: fmt(new Date(now - 3*365*864e5)), end };
+  return {
+    start: document.getElementById('startDate').value,
+    end: document.getElementById('endDate').value || end,
+  };
+}
+
+function setStatus(msg, type='') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status ' + type;
+}
+
+// 生成指数
+async function buildIndex() {
+  if (!stocks.length) { setStatus('请先添加股票', 'error'); return; }
+  const { start, end } = getDateRange();
+  if (!start) { setStatus('请选择开始日期', 'error'); return; }
+
+  const btn = document.getElementById('buildBtn');
+  btn.disabled = true;
+  setStatus('数据拉取中...', 'loading');
+
+  try {
+    const res = await fetch(`${API}/api/build_index`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codes: stocks.map(s => s.code), weight_type: weightType, start_date: start, end_date: end }),
+    });
+    const data = await res.json();
+    if (data.error) { setStatus(data.error, 'error'); return; }
+    setStatus(`共 ${data.bars.length} 个交易日`, 'success');
+    renderChart(data);
+  } catch(e) {
+    setStatus('请求失败：' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderChart(data) {
+  const panel = document.getElementById('chartPanel');
+  panel.style.display = 'block';
+
+  // 权重展示
+  const wLabel = { equal: '等额加权', market_cap: '市值加权', amount: '成交额加权' };
+  document.getElementById('chartTitle').textContent = '自定义指数（基准值 1000）';
+  document.getElementById('chartSubtitle').textContent =
+    `${data.start_date} — ${data.end_date}  ·  ${wLabel[data.weight_type]}  ·  ${data.stocks.length} 只股票`;
+
+  const weightBar = document.getElementById('weightBar');
+  weightBar.innerHTML = data.stocks.map(s => {
+    const name = stocks.find(x => x.code === s.code)?.name || s.code;
+    return `<div class="weight-item">${name} <span>${s.weight}%</span></div>`;
+  }).join('');
+
+  // ECharts K线
+  const dates = data.bars.map(b => b.date);
+  const ohlc = data.bars.map(b => [b.open, b.close, b.low, b.high]);
+  const closes = data.bars.map(b => b.close);
+
+  if (!chart) {
+    chart = echarts.init(document.getElementById('chart'), 'dark');
+  }
+
+  const lastClose = closes[closes.length - 1];
+  const firstClose = closes[0];
+  const pct = ((lastClose - firstClose) / firstClose * 100).toFixed(2);
+  const pctColor = pct >= 0 ? '#3fb950' : '#f85149';
+
+  chart.setOption({
+    backgroundColor: 'transparent',
+    animation: false,
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' },
+      backgroundColor: '#1c2128',
+      borderColor: '#30363d',
+      textStyle: { color: '#e6edf3', fontSize: 12 },
+      formatter(params) {
+        const k = params.find(p => p.seriesName === '指数');
+        if (!k) return '';
+        const [o, c, l, h] = k.value;
+        const chg = ((c - o) / o * 100).toFixed(2);
+        const col = c >= o ? '#3fb950' : '#f85149';
+        return `<div style="padding:4px 0">
+          <b>${k.name}</b><br>
+          开 ${o.toFixed(2)}　高 ${h.toFixed(2)}<br>
+          低 ${l.toFixed(2)}　收 <span style="color:${col}">${c.toFixed(2)}</span><br>
+          涨跌 <span style="color:${col}">${chg}%</span>
+        </div>`;
+      }
+    },
+    grid: { left: 60, right: 20, top: 40, bottom: 60 },
+    xAxis: {
+      type: 'category', data: dates,
+      axisLine: { lineStyle: { color: '#30363d' } },
+      axisLabel: { color: '#8b949e', fontSize: 11 },
+      splitLine: { show: false },
+    },
+    yAxis: {
+      scale: true,
+      axisLine: { lineStyle: { color: '#30363d' } },
+      axisLabel: { color: '#8b949e', fontSize: 11 },
+      splitLine: { lineStyle: { color: '#21262d' } },
+    },
+    dataZoom: [
+      { type: 'inside', start: 0, end: 100 },
+      { type: 'slider', start: 0, end: 100, height: 24, bottom: 8,
+        borderColor: '#30363d', fillerColor: 'rgba(88,166,255,0.1)',
+        handleStyle: { color: '#58a6ff' }, textStyle: { color: '#8b949e' } },
+    ],
+    series: [{
+      name: '指数',
+      type: 'candlestick',
+      data: ohlc,
+      itemStyle: {
+        color: '#3fb950', color0: '#f85149',
+        borderColor: '#3fb950', borderColor0: '#f85149',
+      },
+    }],
+  }, true);
+
+  window.addEventListener('resize', () => chart && chart.resize());
+}
+</script>
+</body>
+</html>
